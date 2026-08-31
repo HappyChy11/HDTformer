@@ -1,0 +1,47 @@
+experiment:
+  method: HDTformer
+  dataset: BTC
+  seed: 12
+  output_dir: ../outputs
+
+data:
+  path: ../../Data/RV_BTC.csv
+  target_column: realized_volatility_5T
+  timestamp_column: timestamp
+  train_ratio: 0.8
+  val_ratio: 0.1
+
+  # All methods use this common anchor so their labels start at the same time.
+  anchor_lookback: 240
+  short_lookback: 20
+  long_lookback: 240
+
+  tasks: [1, 5, 10, 20]
+  task_stride_equals_horizon: true
+
+model:
+  embed_dim: 32
+  dense_dim: 16
+  num_heads: 4
+  dropout: 0.1
+  num_blocks: 4
+  positional_encoding: true
+  use_mask: false
+  max_len: 5000
+  msdcd:
+    trend_kernel_size: 20
+    seasonal_kernel_size: 7
+    avg_pool_kernel_size: 3
+    num_basis_kernels: 4
+
+training:
+  epochs: 20
+  batch_size: 128
+  learning_rate: 0.001
+  num_workers: 0
+  pin_memory: true
+  precision: fp32       # fp32 or fp16
+  gradient_clip: null   # Set to 1.0 to enable clipping.
+  scheduler_factor: 0.2
+  scheduler_patience: 4
+  resource_sample_interval: 0.2
