@@ -1,0 +1,61 @@
+experiment:
+  method: HDTformer
+  dataset: BNB
+  seed: 12
+  output_dir: ../outputs
+  checkpoint_dir: ../checkpoints/BNB_HDTformer_TV_visualization
+
+data:
+  path: ../Data/RV_BNB.csv
+  target_column: realized_volatility_5T
+  timestamp_column: timestamp
+  train_ratio: 0.8
+  val_ratio: 0.1
+  anchor_lookback: 240
+  short_lookback: 20
+  long_lookback: 240
+  # This multivariate input is used only to explain TV feature selection.
+  feature_engineering:
+    enabled: true
+    hema_spans: [60, 720, 1440]
+    include_difference: true
+    difference_name: rv_difference
+    warmup: 1440
+  tasks: [1]
+  task_stride_equals_horizon: true
+
+model:
+  embed_dim: 32
+  dense_dim: 16
+  num_heads: 4
+  dropout: 0.1
+  num_blocks: 4
+  positional_encoding: true
+  use_mask: false
+  max_len: 5000
+  temporal_vector:
+    # Input order: RV, HEMA-1h, HEMA-12h, HEMA-1d, RV-difference.
+    input_feature_count: 5
+    linear_feature_indices: [0]
+    periodic_feature_indices: [0, 1, 2, 3]
+  msdcd:
+    trend_kernel_size: 20
+    seasonal_kernel_size: 7
+    avg_pool_kernel_size: 3
+    num_basis_kernels: 4
+    basis_kernel_init:
+      distribution: normal
+      mean: 0.0
+      std: 1.0
+
+training:
+  epochs: 20
+  batch_size: 128
+  learning_rate: 0.001
+  num_workers: 0
+  pin_memory: true
+  precision: fp32
+  gradient_clip: null
+  scheduler_factor: 0.2
+  scheduler_patience: 4
+  resource_sample_interval: 1.0
