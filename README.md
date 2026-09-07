@@ -286,10 +286,33 @@ The `temporal_vector` block contains:
 | Parameter | Paper setting | Description |
 |---|---:|---|
 | `input_feature_count` | `1` | number of short-term input features |
-| `linear_feature_index` | `0` | feature used by the linear TV branch |
-| `periodic_feature_indices` | `[0]` | features used by the periodic TV branch |
-| `init_mean` | `0.0` | mean of TV parameter initialization |
-| `init_std` | `1.0` | standard deviation of TV parameter initialization |
+| `linear_feature_indices` | `[0]` | ordered features selected by the linear TV branch |
+| `periodic_feature_indices` | `[0]` | ordered features selected by the periodic TV branch |
+
+Both branches accept ordered integer index sequences. Indices must lie in
+`[0, input_feature_count - 1]` and must be unique within each sequence;
+overlap between branches is allowed. Selection order is preserved and remains
+fixed during forward computation. Empty sequences are supported.
+
+For input `[B, p, d]`, linear weights and biases have shape `[p, d_l]`,
+and periodic weights and biases have shape `[p, d_p]`. All four tensors are
+initialized independently from `N(0, 1)` and broadcast over the batch.
+The branches compute `W_linear * X_l + b_linear` and
+`sin(W_periodic * X_p + b_periodic)` element-wise after `index_select(2, ...)`.
+Even a single-feature branch retains shape `[B, p, 1]`. Concatenation keeps
+all original features first, followed by the linear and periodic outputs,
+for a final shape of `[B, p, d + d_l + d_p]`. The downstream embedding derives
+its input width automatically from this count.
+
+Migration: replace `linear_feature_index: 0` with
+`linear_feature_indices: [0]` and remove `init_mean` / `init_std` from older
+configurations; initialization is now fixed to `N(0, 1)`. Old checkpoints
+store linear weights and biases as `[p]`, whereas this implementation uses
+`[p, 1]` for a one-feature branch. To reuse such a model state, explicitly
+unsqueeze the final dimension of `std.temporal_vector.weights_linear` and
+`std.temporal_vector.bias_linear` before loading, and retain the original
+feature selection. Checkpoints do not store the index sequences, so always
+reuse the matching configuration. Retrain when changing the selected features.
 
 Thus, the TV output in the forecasting experiments has three channels: the
 original RV, one learned linear feature, and one learned periodic feature. In
@@ -332,7 +355,8 @@ The following relationships must hold:
 - `long_lookback <= anchor_lookback`;
 - `short_lookback <= long_lookback`;
 - `embed_dim` must be divisible by `num_heads`;
-- every TV feature index must be smaller than `input_feature_count`;
+- every TV feature index must be an integer in `[0, input_feature_count - 1]`;
+- neither TV index sequence may contain duplicates (cross-branch overlap is allowed);
 - when feature engineering is enabled, `input_feature_count` must equal
   `2 + len(hema_spans)`;
 - when feature engineering is enabled, `warmup` should be at least the largest
